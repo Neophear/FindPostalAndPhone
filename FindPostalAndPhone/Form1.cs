@@ -19,36 +19,88 @@ namespace FindPostalAndPhone
         private ICollection<WebsiteWithPostal> sites;
         BackgroundWorker worker = new BackgroundWorker();
 
-public Form1() { InitializeComponent(); sites = new List<WebsiteWithPostal>(); worker.RunWorkerCompleted += Worker_RunWorkerCompleted; worker.DoWork += Worker_DoWork; worker.WorkerSupportsCancellation = true; }
-private void Worker_DoWork(object sender, DoWorkEventArgs e) { SetButtonsVisibilityDelegate sbvd = new SetButtonsVisibilityDelegate(SetButtonsVisibility); Invoke(sbvd, true); ReadExcel(); }
-private void Worker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e) { btnRun.Visible = true; btnStop.Visible = false; txtFilePath.ReadOnly = false; btnFindFile.Enabled = true; }
-private void btnFindFile_Click(object sender, EventArgs e) { ofdExcelFile.ShowDialog(); if (ofdExcelFile.CheckFileExists) txtFilePath.Text = ofdExcelFile.FileName; }
-private void btnRun_Click(object sender, EventArgs e) => worker.RunWorkerAsync();
-private void btnStop_Click(object sender, EventArgs e) => worker.CancelAsync(); private delegate void SetButtonsVisibilityDelegate(bool running);
-private void SetButtonsVisibility(bool running) { btnRun.Visible = !running; btnStop.Visible = running; txtFilePath.ReadOnly = running; btnFindFile.Enabled = !running; }
-private void ReadExcel() { try { System.IO.FileInfo file = new System.IO.FileInfo(txtFilePath.Text); if (file.Exists) { var package = new ExcelPackage(file);
-ExcelWorksheet ws = package.Workbook.Worksheets[1]; var endRow = ws.Dimension.End.Row; var lastRow = 0; for (int i = 1; i <= endRow; i++) {
-if (worker.CancellationPending) break; SetMessage($"Kører række {i} af {endRow}"); string link = ws.Cells[i, 1].Text.Trim(); if (link != "") {
-string address = ws.Cells[i, 1].Address; WebsiteWithPostal web = new WebsiteWithPostal { URL = link, Address = address }; sites.Add(web); getPostalCodeAndPhone(web);
-ws.Cells[i, 2].Value = web.PostalCode; ws.Cells[i, 3].Value = web.Phone; } if (i % 10 == 0) package.Save(); lastRow = i; } package.Save();
-SetMessage($"{lastRow} rækker kørt og gemt!"); } else throw new ArgumentException(); } catch (ArgumentException) { MessageBox.Show("Kunne ikke finde filen"); }
-catch (System.IO.IOException e) { MessageBox.Show(e.Message); } finally { btnRun.Enabled = true; } } private void SetMessage(string message) => tssLeft.Text = message;
-private void getPostalCodeAndPhone(WebsiteWithPostal web) { try { WebClient client = new WebClient(); HtmlAgilityPack.HtmlDocument document = new HtmlAgilityPack.HtmlDocument();
-string downloadString = client.DownloadString(web.URL); document.LoadHtml(downloadString.ToLower()); var select = document.DocumentNode.SelectNodes("//meta[@http-equiv='refresh' and contains(@content, 'url')]");
-if (select != null) {  web.URL = select[0].Attributes["content"].Value.Split('=')[1]; downloadString = client.DownloadString(web.URL); document.LoadHtml(downloadString); }
-HtmlAgilityPack.HtmlNodeCollection bodyNodes = document.DocumentNode.SelectNodes("//body"); if (bodyNodes == null) web.PostalCode = "Ingen <body> på siden.";
-else { string innerText = document.DocumentNode.SelectNodes("//body")[0].InnerText; web.PostalCode = getPostal(innerText); web.Phone = getPhone(innerText);
-if (web.Phone == "" || web.PostalCode == "") { web.getSubSites(); foreach (String sub in web.subsites) { downloadString = client.DownloadString(web.URL.TrimEnd('/') + sub);
-document.LoadHtml(downloadString); innerText = document.DocumentNode.SelectNodes("//body")[0].InnerText;
-if (web.Phone == "") web.Phone = getPhone(innerText); if (web.PostalCode == "") web.PostalCode = getPostal(innerText);
-if (web.PostalCode != "" && web.Phone != "") break; } } if (web.Phone == "") web.Phone = "Intet fundet!"; if (web.PostalCode == "")
-web.PostalCode = "Intet fundet!"; } } catch (WebException) { web.PostalCode = "Kunne ikke finde siden"; } catch (Exception e) { web.PostalCode = e.Message; } }
-public string getPostal(string innerText) { Regex f = new Regex(@"(?:(?:\w(?: |&nbsp;))(\d{4}))|(?:(\d{4})(?: |&nbsp;)\w)"); string result = "";
-foreach (Match m in f.Matches(innerText)) { string value = m.Groups[1].Value; if (value == "" && m.Groups.Count > 2) value = m.Groups[2].Value;
-if (postalCodes.Contains(value)) { result = value; break; } } return result; } private string getPhone(string innerText)
-{ string result = ""; Regex t = new Regex(@"(?:Tlf|Telefon)[\.\:]\s*(?:\+45)?((?: ?\d){8})"); Regex t2 = new Regex(@"(?:\+45 ?)?(\d(?: ?\d){7})");
-MatchCollection mc = t.Matches(innerText); if (mc.Count > 0) result = mc[0].Groups[0].Value; else { mc = t2.Matches(innerText); foreach (Match m in mc)
-{ string value = m.Groups[0].Value; if (value.Contains(" ")) result = value; } } return result; }
+        public Form1() { InitializeComponent(); sites = new List<WebsiteWithPostal>(); worker.RunWorkerCompleted += Worker_RunWorkerCompleted; worker.DoWork += Worker_DoWork; worker.WorkerSupportsCancellation = true; }
+        private void Worker_DoWork(object sender, DoWorkEventArgs e) { SetButtonsVisibilityDelegate sbvd = new SetButtonsVisibilityDelegate(SetButtonsVisibility); Invoke(sbvd, true); ReadExcel(); }
+        private void Worker_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e) { btnRun.Visible = true; btnStop.Visible = false; txtFilePath.ReadOnly = false; btnFindFile.Enabled = true; }
+        private void btnFindFile_Click(object sender, EventArgs e) { ofdExcelFile.ShowDialog(); if (ofdExcelFile.CheckFileExists) txtFilePath.Text = ofdExcelFile.FileName; }
+        private void btnRun_Click(object sender, EventArgs e) => worker.RunWorkerAsync();
+        private void btnStop_Click(object sender, EventArgs e) => worker.CancelAsync(); private delegate void SetButtonsVisibilityDelegate(bool running);
+        private void SetButtonsVisibility(bool running) { btnRun.Visible = !running; btnStop.Visible = running; txtFilePath.ReadOnly = running; btnFindFile.Enabled = !running; }
+        private void ReadExcel()
+        {
+            try
+            {
+                System.IO.FileInfo file = new System.IO.FileInfo(txtFilePath.Text); if (file.Exists)
+                {
+                    var package = new ExcelPackage(file);
+                    ExcelWorksheet ws = package.Workbook.Worksheets[1]; var endRow = ws.Dimension.End.Row; var lastRow = 0; for (int i = 1; i <= endRow; i++)
+                    {
+                        if (worker.CancellationPending) break; SetMessage($"Kører række {i} af {endRow}"); string link = ws.Cells[i, 1].Text.Trim(); if (link != "")
+                        {
+                            string address = ws.Cells[i, 1].Address; WebsiteWithPostal web = new WebsiteWithPostal { URL = link, Address = address }; sites.Add(web); getPostalCodeAndPhone(web);
+                            ws.Cells[i, 2].Value = web.PostalCode; ws.Cells[i, 3].Value = web.Phone;
+                        }
+                        if (i % 10 == 0) package.Save(); lastRow = i;
+                    }
+                    package.Save();
+                    SetMessage($"{lastRow} rækker kørt og gemt!");
+                }
+                else throw new ArgumentException();
+            }
+            catch (ArgumentException) { MessageBox.Show("Kunne ikke finde filen"); }
+            catch (System.IO.IOException e) { MessageBox.Show(e.Message); }
+            finally { btnRun.Enabled = true; }
+        }
+        private void SetMessage(string message) => tssLeft.Text = message;
+        private void getPostalCodeAndPhone(WebsiteWithPostal web)
+        {
+            try
+            {
+                WebClient client = new WebClient(); HtmlAgilityPack.HtmlDocument document = new HtmlAgilityPack.HtmlDocument();
+                string downloadString = client.DownloadString(web.URL); document.LoadHtml(downloadString.ToLower()); var select = document.DocumentNode.SelectNodes("//meta[@http-equiv='refresh' and contains(@content, 'url')]");
+                if (select != null) { web.URL = select[0].Attributes["content"].Value.Split('=')[1]; downloadString = client.DownloadString(web.URL); document.LoadHtml(downloadString); }
+                HtmlAgilityPack.HtmlNodeCollection bodyNodes = document.DocumentNode.SelectNodes("//body"); if (bodyNodes == null) web.PostalCode = "Ingen <body> på siden.";
+                else
+                {
+                    string innerText = document.DocumentNode.SelectNodes("//body")[0].InnerText; web.PostalCode = getPostal(innerText); web.Phone = getPhone(innerText);
+                    if (web.Phone == "" || web.PostalCode == "")
+                    {
+                        web.getSubSites(); foreach (String sub in web.subsites)
+                        {
+                            downloadString = client.DownloadString(web.URL.TrimEnd('/') + sub);
+                            document.LoadHtml(downloadString); innerText = document.DocumentNode.SelectNodes("//body")[0].InnerText;
+                            if (web.Phone == "") web.Phone = getPhone(innerText); if (web.PostalCode == "") web.PostalCode = getPostal(innerText);
+                            if (web.PostalCode != "" && web.Phone != "") break;
+                        }
+                    }
+                    if (web.Phone == "") web.Phone = "Intet fundet!"; if (web.PostalCode == "")
+                        web.PostalCode = "Intet fundet!";
+                }
+            }
+            catch (WebException) { web.PostalCode = "Kunne ikke finde siden"; }
+            catch (Exception e) { web.PostalCode = e.Message; }
+        }
+        public string getPostal(string innerText)
+        {
+            Regex f = new Regex(@"(?:(?:\w(?: |&nbsp;))(\d{4}))|(?:(\d{4})(?: |&nbsp;)\w)"); string result = "";
+            foreach (Match m in f.Matches(innerText))
+            {
+                string value = m.Groups[1].Value; if (value == "" && m.Groups.Count > 2) value = m.Groups[2].Value;
+                if (postalCodes.Contains(value)) { result = value; break; }
+            }
+            return result;
+        }
+        private string getPhone(string innerText)
+        {
+            string result = ""; Regex t = new Regex(@"(?:Tlf|Telefon)[\.\:]\s*(?:\+45)?((?: ?\d){8})"); Regex t2 = new Regex(@"(?:\+45 ?)?(\d(?: ?\d){7})");
+            MatchCollection mc = t.Matches(innerText); if (mc.Count > 0) result = mc[0].Groups[0].Value;
+            else
+            {
+                mc = t2.Matches(innerText); foreach (Match m in mc)
+                { string value = m.Groups[0].Value; if (value.Contains(" ")) result = value; }
+            }
+            return result;
+        }
 
         #region Postalcodes
         private string postalCodes = @"1000,1001,1002,1003,1004,1005,1006,1007,1008,1009,1010,1011,1012,1013,1014,1015,1016,1017,1018,1019,1020,1021,1022,1023,1024,
@@ -121,7 +173,7 @@ MatchCollection mc = t.Matches(innerText); if (mc.Count > 0) result = mc[0].Grou
                 document.LoadHtml(downloadString);
 
                 HtmlAgilityPack.HtmlNodeCollection aNodes = document.DocumentNode.SelectNodes("//a");
-                
+
                 foreach (HtmlAgilityPack.HtmlNode a in aNodes)
                 {
                     string href = a.Attributes["href"]?.Value;
